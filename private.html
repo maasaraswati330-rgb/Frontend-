@@ -8,24 +8,27 @@
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;700&display=swap');
   :root{--bg:#080b09;--panel:#0e1310;--soft:#121714;--line:#1a2a21;--neon:#10ff6a;--ink:#e8ffe8;--muted:#a6f0bf;--danger:#ff6b6b}
   *{box-sizing:border-box}
-  body{margin:0;min-height:100vh;background:radial-gradient(1200px 600px at 20% -10%, #04230f 0%, #080b09 40%, #000 100%);color:var(--ink);font-family:'Inter',system-ui}
+  body{margin:0;min-height:100vh;background:radial-gradient(1200px 600px at 20% -10%, #04230f 0%, #080b09 40%, #000 100%);color:var(--ink);font-family:'Inter',system-ui;display:flex;flex-direction:column}
   header{position:sticky;top:0;z-index:5;background:rgba(10,13,10,.75);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px;display:flex;gap:10px;align-items:center}
   .chip{border:1px dashed #1e6f46;background:#0f1a14;color:#dfffe9;border-radius:10px;padding:6px 10px;font-size:12px}
   .spacer{flex:1}
-  .wrap{padding:12px;display:flex;gap:12px;flex-direction:column}
+  .wrap{padding:12px;display:flex;gap:12px;flex-direction:column;flex:1}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;box-shadow:0 10px 28px rgba(16,255,106,.12)}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  input{flex:1;background:var(--soft);border:1px solid var(--line);color:#eaffe8;border-radius:10px;padding:12px}
+  input[type="text"]{flex:1;background:var(--soft);border:1px solid var(--line);color:#eaffe8;border-radius:10px;padding:12px}
   .btn{background:#102019;color:#caffd8;border:1px solid #1e6f46;padding:12px 14px;border-radius:10px;cursor:pointer}
   .btn.primary{background:linear-gradient(180deg,#10ff6a 0%,#0edf5b 100%);color:#072010;border-color:#10ff6a}
   .btn:disabled{opacity:.5}
-  .chat{min-height:50vh;max-height:70vh;overflow:auto;display:flex;flex-direction:column;gap:10px;background:#0a0f0c;border-radius:12px;padding:12px;border:1px solid var(--line)}
+  .chatShell{display:flex;flex-direction:column;min-height:50vh;max-height:75vh}
+  .chat{flex:1;overflow:auto;display:flex;flex-direction:column;gap:10px;background:#0a0f0c;border-radius:12px;padding:12px;border:1px solid var(--line)}
+  .composer{position:sticky;bottom:0;margin-top:8px;display:flex;gap:8px;align-items:center;background:transparent}
   .bub{max-width:85%;background:#0f1c15;border:1px solid #1e6f46;border-radius:12px;padding:10px 12px}
   .me{align-self:flex-end;background:#12251b;border-color:#2ad072}
   .meta{font-size:11px;color:#97eeb8;margin-top:4px}
   .sys{align-self:center;color:#9fe8bd;font-size:12px}
-  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:max(16px,calc(env(safe-area-inset-bottom)+12px));background:#10241a;color:#b8ffd3;border:1px solid #1e6f46;padding:10px 14px;border-radius:10px;opacity:0;transition:.25s}
-  .toast.show{opacity:1}
+  a.link{color:#8dffc3;text-decoration:underline}
+  .hint{color:var(--muted);font-size:12px}
+  .err{color:var(--danger);font-size:13px}
 </style>
 </head>
 <body>
@@ -44,21 +47,22 @@
       <input id="inviteURL" readonly placeholder="Invite URL will appear here"/>
       <button id="btnCopy" class="btn">Copy</button>
     </div>
-    <div id="err" style="color:#ff6b6b;margin-top:6px"></div>
-    <div style="color:var(--muted);font-size:12px;margin-top:6px">Private chat is one-to-one (2 members). Share invite link to start.</div>
+    <div id="err" class="err"></div>
+    <div class="hint" style="margin-top:6px">Private chat is one-to-one (2 members). Share invite link to start.</div>
   </div>
 
-  <div class="card">
+  <div class="card chatShell">
     <div class="chat" id="chat"></div>
-    <div class="row" style="margin-top:8px">
-      <input id="msg" placeholder="Type message and press Enter..." disabled/>
+    <div class="composer">
+      <input id="msg" type="text" placeholder="Type message and press Enter..." disabled/>
+      <input id="file" type="file" style="display:none"/>
+      <button id="btnFile" class="btn" disabled>Attach</button>
       <button id="btnSend" class="btn primary" disabled>Send</button>
       <button id="btnLeave" class="btn" disabled>Leave</button>
     </div>
+    <div class="hint">Max file size: 1MB</div>
   </div>
 </div>
-
-<div id="toast" class="toast">Status</div>
 
 <script>
 const BACKEND_BASE='https://frontend-1-23zz.onrender.com';
@@ -69,6 +73,8 @@ const API={
   leave:(rid,anon)=>BACKEND_BASE+'/v1/rooms/leave?room_id='+encodeURIComponent(rid)+'&anon_id='+encodeURIComponent(anon),
   list:(rid,l=100)=>BACKEND_BASE+`/v1/messages/list?room_id=${encodeURIComponent(rid)}&limit=${l}`,
   post:(rid)=>BACKEND_BASE+'/v1/messages/post?room_id='+encodeURIComponent(rid),
+  upload:(rid)=>BACKEND_BASE+'/v1/files/upload?room_id='+encodeURIComponent(rid),
+  fileGet:(fp)=>BACKEND_BASE+fp,
 };
 const qs=new URLSearchParams(location.search);
 let anonId=qs.get('anon_id')||null;
@@ -76,50 +82,63 @@ let roomId=qs.get('room_id')||null;
 let invite=qs.get('invite')||null;
 let poll=null,last=0;
 const $=id=>document.getElementById(id);
-const toast=(t)=>{const el=$('toast');el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),1200);};
 function chips(){ $('cAnon').textContent='Anon: '+(anonId||'—'); $('cRoom').textContent='Room: '+(roomId||'—'); $('cInv').textContent='Invite: '+(invite||'—'); }
-function pushSys(t){const d=document.createElement('div');d.className='sys';d.textContent=t;$('chat').appendChild(d);$('chat').scrollTop=$('chat').scrollHeight;}
-function pushMsg(me,txt,who){const d=document.createElement('div');d.className='bub'+(me?' me':'');d.innerHTML=`<div>${txt.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</div><div class="meta">${who}</div>`;$('chat').appendChild(d);$('chat').scrollTop=$('chat').scrollHeight;}
-function enableChat(on){ $('msg').disabled=!on; $('btnSend').disabled=!on; $('btnLeave').disabled=!on; }
-async function ensureAnon(){ if(anonId) return; const r=await fetch(API.anon); if(!r.ok) throw new Error('ID failed'); const j=await r.json(); anonId=j.id; const u=new URL(location.href); u.searchParams.set('anon_id',anonId); history.replaceState(null,'',u.toString()); chips(); }
+function linkify(t){ return t.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])).replace(/(https?:\/\/[^\s<]+)/g,'<a class="link" target="_blank" rel="noopener" href="$1">$1</a>'); }
+function renderMessage(m){
+  const me=(m.sender_anon_id===anonId);
+  const d=document.createElement('div'); d.className='bub'+(me?' me':'');
+  let body='';
+  if(m.msg_type==='file'){ const href=API.fileGet(m.content); body=`<div><a class="link" target="_blank" rel="noopener" href="${href}">Download file</a></div>`; }
+  else{ body=`<div>${linkify(m.content)}</div>`; }
+  d.innerHTML=`${body}<div class="meta">${me?'You':m.sender_anon_id}</div>`;
+  $('chat').appendChild(d); $('chat').scrollTop=$('chat').scrollHeight;
+}
+function pushSys(t){ const d=document.createElement('div'); d.className='sys'; d.textContent=t; $('chat').appendChild(d); $('chat').scrollTop=$('chat').scrollHeight; }
+function enableChat(on){ $('msg').disabled=!on; $('btnSend').disabled=!on; $('btnLeave').disabled=!on; $('btnFile').disabled=!on; }
+async function ensureAnon(){ if(anonId) return; const r=await fetch(API.anon); const j=await r.json(); anonId=j.id; const u=new URL(location.href); u.searchParams.set('anon_id',anonId); history.replaceState(null,'',u.toString()); chips(); }
 async function getInvite(){
   $('err').textContent=''; await ensureAnon();
   const r=await fetch(API.privCreate(anonId),{method:'POST'}); if(!r.ok){$('err').textContent='Failed to create';return;}
   const j=await r.json(); roomId=j.room_id; invite=j.invite_token; $('inviteURL').value=j.invite_url; chips();
-  // owner already joined server-side; enable chat
-  enableChat(true); toast('Invite ready'); startPoll();
+  // owner auto-joined server; enable chat
+  enableChat(true); startPoll();
 }
 async function joinViaInvite(){
   await ensureAnon();
-  if(!roomId||!invite){ pushSys('Open an invite link or create one.'); return; }
+  if(!roomId||!invite){ pushSys('Open a valid invite link or create one.'); return; }
   const r=await fetch(API.privJoin(roomId),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({anon_id:anonId,invite_token:invite})});
-  if(!r.ok){const tx=await r.json().catch(()=>({detail:'Join failed'})); $('err').textContent=tx.detail; return;}
-  enableChat(true); toast('Joined'); startPoll();
+  if(!r.ok){$('err').textContent='Join failed'; return;}
+  enableChat(true); startPoll();
 }
-async function leave(){
-  if(!roomId) return; try{ await fetch(API.leave(roomId,anonId),{method:'POST'});}catch(_){}
-  stopPoll(); $('chat').innerHTML=''; enableChat(false); const prev=roomId; roomId=null; chips(); toast('Left #'+prev);
+async function leave(){ if(!roomId) return; try{ await fetch(API.leave(roomId,anonId),{method:'POST'});}catch(_){}
+  stopPoll(); $('chat').innerHTML=''; enableChat(false); const prev=roomId; roomId=null; chips(); pushSys('Left #'+prev);
 }
-async function send(){
+async function sendText(){
   const t=$('msg').value.trim(); if(!t||!roomId) return;
   const r=await fetch(API.post(roomId),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({anon_id:anonId,msg_type:'text',content:t})});
-  if(!r.ok){const tx=await r.json().catch(()=>({detail:'Send failed'})); toast(tx.detail); return;}
+  if(!r.ok){$('err').textContent='Send failed'; return;}
   $('msg').value=''; await refresh();
 }
-async function list(){ if(!roomId) return []; const r=await fetch(API.list(roomId)); if(!r.ok) return []; return r.json(); }
-async function refresh(){
-  const msgs=await list(); if(msgs.length===last) return;
-  $('chat').innerHTML=''; for(const m of msgs){ const me=m.sender_anon_id===anonId; pushMsg(me,m.content,me?'You':m.sender_anon_id); }
-  last=msgs.length;
+async function uploadFile(file){
+  if(!file){return;}
+  if(file.size> (1024*1024)){ $('err').textContent='File too large (max 1MB)'; return; }
+  const fd=new FormData(); fd.append('anon_id', anonId); fd.append('f', file);
+  const r=await fetch(API.upload(roomId),{method:'POST',body:fd});
+  if(!r.ok){ $('err').textContent='Upload failed (1MB max)'; return; }
+  await refresh();
 }
+async function list(){ if(!roomId) return []; const r=await fetch(API.list(roomId)); if(!r.ok) return []; return r.json(); }
+async function refresh(){ const msgs=await list(); if(msgs.length===last) return; $('chat').innerHTML=''; msgs.forEach(renderMessage); last=msgs.length; }
 function startPoll(){ stopPoll(); refresh(); poll=setInterval(refresh,2000); }
 function stopPoll(){ if(poll){clearInterval(poll); poll=null;} }
-$('btnInvite').addEventListener('click',getInvite);
-$('btnCopy').addEventListener('click',()=>{ navigator.clipboard?.writeText($('inviteURL').value||''); toast('Copied'); });
-$('btnSend').addEventListener('click',send);
-$('btnLeave').addEventListener('click',leave);
-$('msg').addEventListener('keydown',e=>{ if(e.key==='Enter') send(); });
-(async()=>{ try{ chips(); await ensureAnon(); chips(); if(roomId && invite){ await joinViaInvite(); } else { pushSys('Create an invite link to start a 1:1 chat.'); } }catch(e){ $('err').textContent=e.message; }})();
+$('btnInvite').addEventListener('click', getInvite);
+$('btnCopy').addEventListener('click', ()=> navigator.clipboard?.writeText($('inviteURL').value||'') );
+$('btnSend').addEventListener('click', sendText);
+$('msg').addEventListener('keydown', e=>{ if(e.key==='Enter') sendText(); });
+$('btnLeave').addEventListener('click', leave);
+$('btnFile').addEventListener('click', ()=> $('file').click());
+$('file').addEventListener('change', e=> uploadFile(e.target.files[0]));
+(async()=>{ try{ chips(); await ensureAnon(); chips(); if(roomId && invite){ await joinViaInvite(); } else { pushSys('Get invite link or open an invite URL to start.'); } }catch(e){ $('err').textContent=e.message; }})();
 </script>
 </body>
 </html>
