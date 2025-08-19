@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>WipeWeb — Public Group</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;700&display=swap');
+  :root{--bg:#080b09;--panel:#0e1310;--soft:#121714;--line:#1a2a21;--neon:#10ff6a;--ink:#e8ffe8;--muted:#a6f0bf;--danger:#ff6b6b}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:radial-gradient(1200px 600px at 20% -10%, #04230f 0%, #080b09 40%, #000 100%);color:var(--ink);font-family:'Inter',system-ui}
+  header{position:sticky;top:0;z-index:5;background:rgba(10,13,10,.75);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px;display:flex;gap:10px;align-items:center}
+  .chip{border:1px dashed #1e6f46;background:#0f1a14;color:#dfffe9;border-radius:10px;padding:6px 10px;font-size:12px}
+  .spacer{flex:1}
+  .wrap{padding:12px;display:flex;gap:12px;flex-direction:column}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;box-shadow:0 10px 28px rgba(16,255,106,.12)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  input{flex:1;background:var(--soft);border:1px solid var(--line);color:#eaffe8;border-radius:10px;padding:12px}
+  .btn{background:#102019;color:#caffd8;border:1px solid #1e6f46;padding:12px 14px;border-radius:10px;cursor:pointer}
+  .btn.primary{background:linear-gradient(180deg,#10ff6a 0%,#0edf5b 100%);color:#072010;border-color:#10ff6a}
+  .btn:disabled{opacity:.5}
+  .chat{min-height:50vh;max-height:70vh;overflow:auto;display:flex;flex-direction:column;gap:10px;background:#0a0f0c;border-radius:12px;padding:12px;border:1px solid var(--line)}
+  .bub{max-width:85%;background:#0f1c15;border:1px solid #1e6f46;border-radius:12px;padding:10px 12px}
+  .me{align-self:flex-end;background:#12251b;border-color:#2ad072}
+  .meta{font-size:11px;color:#97eeb8;margin-top:4px}
+  .sys{align-self:center;color:#9fe8bd;font-size:12px}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:max(16px,calc(env(safe-area-inset-bottom)+12px));background:#10241a;color:#b8ffd3;border:1px solid #1e6f46;padding:10px 14px;border-radius:10px;opacity:0;transition:.25s}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <span class="chip" id="cAnon">Anon: —</span>
+  <span class="chip" id="cRoom">Room: —</span>
+  <div class="spacer"></div>
+  <button class="btn" onclick="location.href='index.html'">Home</button>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <div class="row">
+      <input id="roomName" placeholder="Group name (optional)"/>
+      <button id="btnCreate" class="btn primary">Create Group</button>
+      <input id="shareURL" readonly placeholder="Group share URL will appear here"/>
+      <button id="btnCopy" class="btn">Copy</button>
+    </div>
+    <div id="err" style="color:#ff6b6b;margin-top:6px"></div>
+    <div class="row" style="margin-top:6px;color:var(--muted);font-size:12px">Public groups allow up to 100 members. Share the URL to let others auto-join.</div>
+  </div>
+
+  <div class="card">
+    <div class="chat" id="chat"></div>
+    <div class="row" style="margin-top:8px">
+      <input id="msg" placeholder="Type message and press Enter..." disabled/>
+      <button id="btnSend" class="btn primary" disabled>Send</button>
+      <button id="btnLeave" class="btn" disabled>Leave</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast">Status</div>
+
+<script>
+const BACKEND_BASE='http://0.0.0.0:8000';
+const API={
+  anon: BACKEND_BASE+'/v1/anon/new',
+  publicCreate:(anon)=>BACKEND_BASE+'/v1/public/create?anon_id='+encodeURIComponent(anon),
+  publicJoin:(rid)=>BACKEND_BASE+'/v1/public/join?room_id='+encodeURIComponent(rid),
+  leave:(rid,anon)=>BACKEND_BASE+'/v1/rooms/leave?room_id='+encodeURIComponent(rid)+'&anon_id='+encodeURIComponent(anon),
+  list:(rid,l=100)=>BACKEND_BASE+`/v1/messages/list?room_id=${encodeURIComponent(rid)}&limit=${l}`,
+  post:(rid)=>BACKEND_BASE+'/v1/messages/post?room_id='+encodeURIComponent(rid),
+};
+let anonId=new URLSearchParams(location.search).get('anon_id')||null;
+let roomId=new URLSearchParams(location.search).get('room_id')||null;
+let poll=null,last=0;
+const $=id=>document.getElementById(id);
+const toast=(t)=>{const el=$('toast');el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),1200);};
+function chips(){ $('cAnon').textContent='Anon: '+(anonId||'—'); $('cRoom').textContent='Room: '+(roomId||'—'); }
+function pushSys(t){const d=document.createElement('div');d.className='sys';d.textContent=t;$('chat').appendChild(d);$('chat').scrollTop=$('chat').scrollHeight;}
+function pushMsg(me,txt,who){const d=document.createElement('div');d.className='bub'+(me?' me':'');d.innerHTML=`<div>${txt.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</div><div class="meta">${who}</div>`;$('chat').appendChild(d);$('chat').scrollTop=$('chat').scrollHeight;}
+async function ensureAnon(){ if(anonId) return; const r=await fetch(API.anon); if(!r.ok) throw new Error('ID failed'); const j=await r.json(); anonId=j.id; const u=new URL(location.href); u.searchParams.set('anon_id',anonId); history.replaceState(null,'',u.toString()); chips(); }
+function enableChat(on){ $('msg').disabled=!on; $('btnSend').disabled=!on; $('btnLeave').disabled=!on; }
+async function createGroup(){
+  $('err').textContent=''; await ensureAnon();
+  const r=await fetch(API.publicCreate(anonId),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('roomName').value||null})});
+  if(!r.ok){const tx=await r.json().catch(()=>({detail:'Create failed'})); $('err').textContent=tx.detail; return;}
+  const j=await r.json(); roomId=j.room_id; $('shareURL').value=j.share_url; chips();
+  // safety: join (owner auto-joined server-side, this ensures client state)
+  await joinGroup(roomId, false);
+}
+async function joinGroup(rid, announce=true){
+  await ensureAnon(); if(!rid) return;
+  const r=await fetch(API.publicJoin(rid),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({anon_id:anonId})});
+  if(!r.ok){const tx=await r.json().catch(()=>({detail:'Join failed'})); $('err').textContent=tx.detail; return;}
+  roomId=rid; chips(); enableChat(true); if(announce) toast('Joined'); startPoll();
+}
+async function leave(){
+  if(!roomId) return; try{ await fetch(API.leave(roomId,anonId),{method:'POST'});}catch(_){}
+  stopPoll(); $('chat').innerHTML=''; enableChat(false); const prev=roomId; roomId=null; chips(); toast('Left #'+prev);
+}
+async function send(){
+  const t=$('msg').value.trim(); if(!t||!roomId) return;
+  const r=await fetch(API.post(roomId),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({anon_id:anonId,msg_type:'text',content:t})});
+  if(!r.ok){const tx=await r.json().catch(()=>({detail:'Send failed'})); toast(tx.detail); return;}
+  $('msg').value=''; await refresh();
+}
+async function list(){ if(!roomId) return []; const r=await fetch(API.list(roomId)); if(!r.ok) return []; return r.json(); }
+async function refresh(){
+  const msgs=await list(); if(msgs.length===last) return;
+  $('chat').innerHTML=''; for(const m of msgs){ const me=m.sender_anon_id===anonId; pushMsg(me,m.content,me?'You':m.sender_anon_id); }
+  last=msgs.length;
+}
+function startPoll(){ stopPoll(); refresh(); poll=setInterval(refresh,2000); }
+function stopPoll(){ if(poll){clearInterval(poll); poll=null;} }
+$('btnCreate').addEventListener('click',createGroup);
+$('btnCopy').addEventListener('click',()=>{ navigator.clipboard?.writeText($('shareURL').value); toast('Copied'); });
+$('btnSend').addEventListener('click',send);
+$('btnLeave').addEventListener('click',leave);
+$('msg').addEventListener('keydown',e=>{ if(e.key==='Enter') send(); });
+(async()=>{ try{ chips(); await ensureAnon(); chips(); const qs=new URLSearchParams(location.search); const rid=qs.get('room_id'); if(rid){ await joinGroup(rid); } else { pushSys('Create a new public group or open a shared group URL.'); } }catch(e){ $('err').textContent=e.message; }})();
+</script>
+</body>
+</html>
