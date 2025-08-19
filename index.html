@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>WipeWeb — Start</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;700&display=swap');
+  :root{--bg:#080b09;--card:#0e1310;--line:#1a2a21;--neon:#10ff6a;--ink:#e8ffe8;--muted:#a7f0bf}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:radial-gradient(1200px 600px at 20% -10%, #04230f 0%, #080b09 40%, #000 100%);color:var(--ink);font-family:'Inter',system-ui}
+  .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{width:min(720px,100%);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:0 12px 30px rgba(16,255,106,.12);text-align:center}
+  h1{margin:0 0 6px;font-size:28px;letter-spacing:.5px}
+  p{margin:0 0 14px;color:var(--muted)}
+  .btn{display:block;width:100%;padding:14px;border-radius:12px;border:1px solid #1e6f46;background:#102019;color:#caffd8;font-weight:700;margin-top:10px;cursor:pointer}
+  .btn:hover{box-shadow:0 8px 22px rgba(16,255,106,.14)}
+  .btn.primary{background:linear-gradient(180deg,#10ff6a 0%,#0edf5b 100%);color:#072010;border-color:#10ff6a}
+  .pill{display:inline-block;border:1px dashed #1e6f46;background:#0f1a14;color:#dfffe9;border-radius:10px;padding:6px 10px;margin-top:8px;font-size:13px}
+  .loader{width:18px;height:18px;border:3px solid #1e6f46;border-top-color:#10ff6a;border-radius:50%;animation:spin 1s linear infinite;display:inline-block;vertical-align:middle}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>WipeWeb</h1>
+    <p>Anonymous chat • Public Groups (100) • Private 1:1</p>
+    <div id="status" class="pill">Generating Anonymous ID… <span class="loader"></span></div>
+    <button id="goPublic" class="btn primary" disabled>Enter Public Group</button>
+    <button id="goPrivate" class="btn" disabled>Start Private 1:1</button>
+  </div>
+</div>
+<script>
+  const BACKEND_BASE='http://0.0.0.0:8000';
+  const API={ anon: BACKEND_BASE+'/v1/anon/new' };
+  let anonId=null;
+  const $=id=>document.getElementById(id);
+  async function getAnon(){
+    const r=await fetch(API.anon); if(!r.ok) throw new Error('ID failed');
+    const j=await r.json(); anonId=j.id;
+    $('status').textContent='Anon: '+anonId;
+    $('goPublic').disabled=false; $('goPrivate').disabled=false;
+  }
+  $('goPublic').addEventListener('click',()=>{ const u=new URL('public.html',location.href); u.searchParams.set('anon_id',anonId); location.href=u; });
+  $('goPrivate').addEventListener('click',()=>{ const u=new URL('private.html',location.href); u.searchParams.set('anon_id',anonId); location.href=u; });
+  getAnon().catch(()=>{$('status').textContent='Failed to get Anonymous ID';});
+</script>
+</body>
+</html>
