@@ -1,1 +1,341 @@
-<!DOCTYPE html> <html lang="hi"> <head> <meta charset="UTF-8"/> <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/> <title>WipeWeb — Public Group</title> <style> @import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;700&display=swap'); :root{--bg:#080b0a;--panel:#0f1311;--soft:#141a17;--line:#1a2b21;--neon:#10ff6a;--ink:#e8ffe8;--muted:#a6f1bf;--danger:#ff6b6b} *{box-sizing:border-box} body{margin:0;min-height:100vh;background:radial-gradient(1200px 600px at 20% -10%, #04230f 0%, #080b0a 40%, #000 100%);color:var(--ink);font-family:'Inter',system-ui;display:flex;flex-direction:column} header{position:sticky;top:0;z-index:5;background:rgba(10,13,10,.75);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:10px 12px;display:flex;gap:8px;align-items:center} .chip{border:1px dashed #1e6f46;background:#0f1a14;color:#dfffe9;border-radius:999px;padding:6px 10px;font-size:12px} .chip-btn{border:1px solid #1e6f46;background:#102019;color:#caffd8;border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer} .chip-btn.primary{background:linear-gradient(180deg,#10ff6a 0%,#0edf5b 100%);color:#072010;border-color:#10ff6a} .spacer{flex:1} .wrap{padding:12px;display:flex;gap:12px;flex-direction:column;flex:1} .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;box-shadow:0 10px 28px rgba(16,255,106,.12)} .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center} .field{flex:1;display:flex;gap:8px;align-items:center} input[type="text"]{flex:1;background:var(--soft);border:1px solid var(--line);color:#eaffe8;border-radius:10px;padding:12px} .btn{background:#102019;color:#caffd8;border:1px solid #1e6f46;padding:12px 14px;border-radius:10px;cursor:pointer} .btn.primary{background:linear-gradient(180deg,#10ff6a 0%,#0edf5b 100%);color:#072010;border-color:#10ff6a} .btn:disabled{opacity:.5} .bar{display:flex;gap:8px;align-items:center;justify-content:space-between} .share-pill{display:flex;gap:6px;align-items:center;border:1px solid #1e6f46;background:#0f1a14;border-radius:999px;padding:6px 10px;max-width:100%;overflow:auto} .share-url{max-width:58vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#b8ffd3;font-size:12px} .chatShell{display:flex;flex-direction:column;min-height:55vh;max-height:78vh} .chat{flex:1;overflow:auto;display:flex;flex-direction:column;gap:10px;background:#0a0f0c;border-radius:12px;padding:12px;border:1px solid var(--line)} .composer{position:sticky;bottom:0;margin-top:8px;display:flex;gap:8px;align-items:center;background:transparent} .bub{max-width:85%;background:#0f1c15;border:1px solid #1e6f46;border-radius:12px;padding:10px 12px} .me{align-self:flex-end;background:#12251b;border-color:#2ad072} .meta{font-size:11px;color:#97eeb8;margin-top:4px} .sys{align-self:center;color:#9fe8bd;font-size:12px} a.link{color:#8dffc3;text-decoration:underline} .hint{color:var(--muted);font-size:12px} .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:max(16px,calc(env(safe-area-inset-bottom)+12px));background:#10241a;color:#b8ffd3;border:1px solid #1e6f46;padding:10px 14px;border-radius:10px;opacity:0;transition:.25s} .toast.show{opacity:1} </style> </head> <body> <header> <span class="chip" id="cAnon">Anon: —</span> <span class="chip" id="cRoom">Room: —</span> <div class="spacer"></div> <button class="chip-btn" onclick="location.href='index.html'">Home</button> </header> <div class="wrap"> <div class="card"> <div class="bar"> <div class="field"> <input id="roomName" placeholder="Group name (optional)"/> <button id="btnCreate" class="btn primary">Create Group</button> </div> <div id="shareWrap" class="share-pill" style="display:none"> <span class="share-url" id="shareURL">—</span> <button id="btnCopy" class="chip-btn">Share</button> </div> </div> <div id="hint" class="hint" style="margin-top:6px">Groups allow up to 100 members. Share URL to auto-join.</div> </div> <div class="card chatShell"> <div class="chat" id="chat"></div> <div class="composer"> <input id="msg" type="text" placeholder="Type message and press Enter..." disabled/> <input id="file" type="file" style="display:none"/> <button id="btnFile" class="btn" disabled>Attach</button> <button id="btnSend" class="btn primary" disabled>Send</button> <button id="btnLeave" class="btn" disabled>Leave</button> </div> <div class="hint">Max file size: 1MB</div> </div> </div> <div id="toast" class="toast">Status</div> <script> const BACKEND_BASE='https://frontend-1-23zz.onrender.com'; // e.g. 'https://d1417...serveo.net' const API={ anon: BACKEND_BASE+'/v1/anon/new', publicCreate:(anon)=>BACKEND_BASE+'/v1/public/create?anon_id='+encodeURIComponent(anon), publicJoin:(rid)=>BACKEND_BASE+'/v1/public/join?room_id='+encodeURIComponent(rid), leave:(rid,anon)=>BACKEND_BASE+'/v1/rooms/leave?room_id='+encodeURIComponent(rid)+'&anon_id='+encodeURIComponent(anon), list:(rid,l=100)=>BACKEND_BASE+`/v1/messages/list?room_id=${encodeURIComponent(rid)}&limit=${l}`, post:(rid)=>BACKEND_BASE+'/v1/messages/post?room_id='+encodeURIComponent(rid), upload:(rid)=>BACKEND_BASE+'/v1/files/upload?room_id='+encodeURIComponent(rid), fileGet:(p)=>BACKEND_BASE+p, }; let anonId=new URLSearchParams(location.search).get('anon_id')||null; let roomId=new URLSearchParams(location.search).get('room_id')||null; let poll=null,last=0; const $=id=>document.getElementById(id); const toast=t=>{const el=$('toast');el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),1200);}; function chips(){ $('cAnon').textContent='Anon: '+(anonId||'—'); $('cRoom').textContent='Room: '+(roomId||'—'); } function linkify(t){ return t.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])).replace(/(https?:\/\/[^\s<]+)/g,'<a class="link" target="_blank" rel="noopener" href="$1">$1</a>'); } function render(m){ const me=(m.sender_anon_id===anonId); const d=document.createElement('div'); d.className='bub'+(me?' me':''); let body=''; if(m.msg_type==='file'){ body=`<div><a class="link" target="_blank" rel="noopener" href="${API.fileGet(m.content)}">Download file</a></div>`; } else { body=`<div>${linkify(m.content)}</div>`; } d.innerHTML=`${body}<div class="meta">${me?'You':m.sender_anon_id}</div>`; $('chat').appendChild(d); $('chat').scrollTop=$('chat').scrollHeight; } function pushSys(t){ const d=document.createElement('div'); d.className='sys'; d.textContent=t; $('chat').appendChild(d); $('chat').scrollTop=$('chat').scrollHeight; } function enableChat(on){ $('msg').disabled=!on; $('btnSend').disabled=!on; $('btnLeave').disabled=!on; $('btnFile').disabled=!on; } async function ensureAnon(){ if(anonId) return; const r=await fetch(API.anon); const j=await r.json(); anonId=j.id; const u=new URL(location.href); u.searchParams.set('anon_id',anonId); history.replaceState(null,'',u.toString()); chips(); } async function createGroup(){ await ensureAnon(); const r=await fetch(API.publicCreate(anonId),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('roomName').value||null})}); if(!r.ok){ toast('Create failed'); return; } const j=await r.json(); roomId=j.room_id; chips(); $('shareURL').textContent=j.share_url; $('shareWrap').style.display='flex'; await joinGroup(roomId,false); } async function joinGroup(rid, announce=true){ await ensureAnon(); const r=await fetch(API.publicJoin(rid),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({anon_id:anonId})}); if(!r.ok){ toast('Join failed'); return; } roomId=rid; chips(); enableChat(true); if(announce) toast('Joined'); start(); } async function leave(){ if(!roomId) return; try{ await fetch(API.leave(roomId,anonId),{method:'POST'});}catch(_){} stop(); $('chat').innerHTML=''; enableChat(false); const prev=roomId; roomId=null; chips(); pushSys('Left #'+prev); } async function sendText(){ const t=$('msg').value.trim(); if(!t||!roomId) return; const r=await fetch(API.post(roomId),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({anon_id:anonId,msg_type:'text',content:t})}); if(!r.ok){ toast('Send failed'); return; } $('msg').value=''; await refresh(); } async function uploadFile(file){ if(!file){return;} if(file.size>1024*1024){ toast('File too large (max 1MB)'); return; } const fd=new FormData(); fd.append('anon_id',anonId); fd.append('f',file); const r=await fetch(API.upload(roomId),{method:'POST',body:fd}); if(!r.ok){ toast('Upload failed (join the room first)'); return; } await refresh(); } async function list(){ if(!roomId) return []; const r=await fetch(API.list(roomId)); if(!r.ok) return []; return r.json(); } async function refresh(){ const msgs=await list(); if(msgs.length===last) return; $('chat').innerHTML=''; msgs.forEach(render); last=msgs.length; } function start(){ stop(); refresh(); poll=setInterval(refresh,2000); } function stop(){ if(poll){ clearInterval(poll); poll=null; } } $('btnCreate').addEventListener('click',createGroup); $('btnCopy').addEventListener('click',()=>{ navigator.clipboard?.writeText($('shareURL').textContent||''); toast('Link copied'); }); $('btnSend').addEventListener('click',sendText); $('msg').addEventListener('keydown',e=>{ if(e.key==='Enter') sendText(); }); $('btnLeave').addEventListener('click',leave); $('btnFile').addEventListener('click',()=> $('file').click()); $('file').addEventListener('change',e=> uploadFile(e.target.files)); (async()=>{ try{ chips(); await ensureAnon(); chips(); const rid=new URLSearchParams(location.search).get('room_id'); if(rid){ await joinGroup(rid); } else { pushSys('Create a group or open a shared URL to join.'); } }catch(e){ toast('Init failed'); }})(); </script> </body> </html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>WipeWeb — Public Group</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Share+Tech+Mono&display=swap');
+        :root {
+            --bg: #0A0D0B; --panel: #0E1311; --soft: #141A17; --line: #1A2B21;
+            --neon: #10FF6A; --ink: #E8FFE8; --muted: #A6F1BF; --danger: #FF6B6B;
+            --shadow: 0 10px 30px rgba(16, 255, 106, .08);
+        }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; }
+        body {
+            margin: 0;
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--ink);
+            display: flex;
+            flex-direction: column;
+        }
+        .app-shell {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            padding: 12px;
+            gap: 12px;
+        }
+        header {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .chip {
+            border: 1px dashed #1E6F46;
+            background: #0F1A14;
+            color: #DFFFE9;
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        .spacer { flex: 1; }
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 14px;
+            box-shadow: var(--shadow);
+        }
+        .main-chat {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .chat-history {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .bubble {
+            max-width: 85%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: 1px solid #1E6F46;
+            background: #0F1A14;
+            word-break: break-word;
+            line-height: 1.4;
+        }
+        .me {
+            align-self: flex-end;
+            background: #11281C;
+            border-color: #2AD072;
+        }
+        .meta { font-size: 11px; color: #97EEB8; margin-top: 4px; opacity: 0.8; }
+        .sys { align-self: center; color: #9FE8BD; font-size: 12px; }
+        .composer {
+            display: flex;
+            gap: 8px;
+            padding-top: 12px;
+            border-top: 1px solid var(--line);
+        }
+        .btn {
+            background: #102019;
+            color: #CAFFD8;
+            border: 1px solid #1E6F46;
+            padding: 12px 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .btn.primary {
+            background: linear-gradient(180deg, #10FF6A 0%, #0EDF5B 100%);
+            color: #072010;
+            border-color: #10FF6A;
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        input[type="text"] {
+            flex: 1;
+            background: var(--soft);
+            border: 1px solid var(--line);
+            color: #EAFFE8;
+            border-radius: 10px;
+            padding: 12px;
+            outline: none;
+        }
+        a.link { color: #8DFFC3; text-decoration: underline; }
+        .toast {
+            position: fixed;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: max(16px, calc(env(safe-area-inset-bottom) + 12px));
+            background: #10241A;
+            color: #B8FFD3;
+            border: 1px solid #1E6F46;
+            padding: 10px 14px;
+            border-radius: 10px;
+            opacity: 0;
+            transition: .25s;
+            pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <header>
+            <span class="chip" id="cAnon">Anon: —</span>
+            <span class="chip" id="cRoom">Room: —</span>
+            <div class="spacer"></div>
+            <button class="btn" onclick="location.href='index.html'">Home</button>
+        </header>
+
+        <div class="card">
+            <div style="display:flex; gap: 8px; align-items: center;">
+                <input id="roomName" type="text" placeholder="Group name (optional)" />
+                <button id="btnCreate" class="btn primary">Create Group</button>
+                <input id="shareURL" type="text" readonly placeholder="Group Share URL" style="flex: 2;"/>
+                <button id="btnCopy" class="btn">Copy</button>
+            </div>
+        </div>
+
+        <div class="card main-chat">
+            <div class="chat-history" id="chat"></div>
+            <div class="composer">
+                <input id="msg" type="text" placeholder="Type message..." disabled />
+                <input id="file" type="file" style="display:none" />
+                <button id="btnFile" class="btn" disabled>Attach</button>
+                <button id="btnSend" class="btn primary" disabled>Send</button>
+            </div>
+            <div style="font-size: 12px; color: var(--muted); padding-top: 6px;">Max file size: 1MB</div>
+        </div>
+    </div>
+    
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const BACKEND_BASE = 'https://frontend-1-23zz.onrender.com';
+        const API = {
+            anon: BACKEND_BASE + '/v1/anon/new',
+            publicCreate: (anon) => BACKEND_BASE + '/v1/public/create?anon_id=' + anon,
+            publicJoin: (rid) => BACKEND_BASE + '/v1/public/join?room_id=' + rid,
+            list: (rid) => BACKEND_BASE + `/v1/messages/list?room_id=${rid}&limit=100`,
+            post: (rid) => BACKEND_BASE + '/v1/messages/post?room_id=' + rid,
+            upload: (rid) => BACKEND_BASE + '/v1/files/upload?room_id=' + rid,
+            fileGet: (path) => BACKEND_BASE + path,
+        };
+
+        const qs = new URLSearchParams(location.search);
+        let anonId = qs.get('anon_id');
+        let roomId = qs.get('room_id');
+        let poll = null;
+
+        const $ = (id) => document.getElementById(id);
+        const toast = (msg) => {
+            const el = $('toast');
+            el.textContent = msg;
+            el.classList.add('show');
+            setTimeout(() => el.classList.remove('show'), 1500);
+        };
+
+        function setChips() {
+            $('cAnon').textContent = 'Anon: ' + (anonId || '—');
+            $('cRoom').textContent = 'Room: ' + (roomId || '—');
+        }
+
+        function enableChat(state) {
+            $('msg').disabled = !state;
+            $('btnSend').disabled = !state;
+            $('btnFile').disabled = !state;
+        }
+        
+        function linkify(text) {
+            const urlRegex = /(https?:\/\/[^\s<]+)/g;
+            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                       .replace(urlRegex, '<a href="$1" target="_blank" rel="noopener" class="link">$1</a>');
+        }
+
+        function renderMessage(m) {
+            const isMe = m.sender_anon_id === anonId;
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble' + (isMe ? ' me' : '');
+            
+            let contentHTML = '';
+            if (m.msg_type === 'file') {
+                contentHTML = `<div><a href="${API.fileGet(m.content)}" target="_blank" rel="noopener" class="link">Download File</a></div>`;
+            } else {
+                contentHTML = `<div>${linkify(m.content)}</div>`;
+            }
+            
+            bubble.innerHTML = `${contentHTML}<div class="meta">${isMe ? 'You' : m.sender_anon_id}</div>`;
+            $('chat').appendChild(bubble);
+            $('chat').scrollTop = $('chat').scrollHeight;
+        }
+
+        async function fetchMessages() {
+            if (!roomId) return;
+            const res = await fetch(API.list(roomId));
+            if (!res.ok) return;
+            const messages = await res.json();
+            $('chat').innerHTML = '';
+            messages.forEach(renderMessage);
+        }
+
+        function startPolling() {
+            stopPolling();
+            fetchMessages();
+            poll = setInterval(fetchMessages, 2000);
+        }
+        function stopPolling() {
+            if (poll) clearInterval(poll);
+            poll = null;
+        }
+
+        async function init() {
+            setChips();
+            if (!anonId) {
+                const res = await fetch(API.anon);
+                const data = await res.json();
+                anonId = data.id;
+                setChips();
+                const url = new URL(location.href);
+                url.searchParams.set('anon_id', anonId);
+                history.replaceState({}, '', url);
+            }
+
+            if (roomId) {
+                const res = await fetch(API.publicJoin(roomId), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ anon_id: anonId })
+                });
+                if (res.ok) {
+                    toast('Joined group!');
+                    enableChat(true);
+                    startPolling();
+                } else {
+                    toast('Failed to join group.');
+                }
+            } else {
+                 $('chat').innerHTML = '<div class="sys">Create a group to start chatting.</div>';
+            }
+        }
+
+        $('btnCreate').addEventListener('click', async () => {
+            const res = await fetch(API.publicCreate(anonId), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: $('roomName').value || null })
+            });
+            if (!res.ok) {
+                toast('Failed to create group.');
+                return;
+            }
+            const data = await res.json();
+            roomId = data.room_id;
+            $('shareURL').value = data.share_url;
+            setChips();
+            enableChat(true);
+            startPolling();
+            toast('Group created and joined!');
+        });
+
+        $('btnCopy').addEventListener('click', () => {
+            const url = $('shareURL').value;
+            if (url) {
+                navigator.clipboard.writeText(url);
+                toast('Link copied!');
+            }
+        });
+        
+        $('btnSend').addEventListener('click', async () => {
+            const content = $('msg').value.trim();
+            if (!content || !roomId) return;
+            const res = await fetch(API.post(roomId), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ anon_id: anonId, msg_type: 'text', content })
+            });
+            if (res.ok) {
+                $('msg').value = '';
+                fetchMessages();
+            } else {
+                toast('Failed to send message.');
+            }
+        });
+
+        $('btnFile').addEventListener('click', () => $('file').click());
+        $('file').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (file.size > 1024 * 1024) {
+                toast('File is too large (max 1MB).');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('anon_id', anonId);
+            formData.append('f', file);
+            
+            const res = await fetch(API.upload(roomId), {
+                method: 'POST',
+                body: formData
+            });
+
+            if (res.ok) {
+                toast('File uploaded!');
+                fetchMessages();
+            } else {
+                toast('Upload failed. Ensure you are in a room.');
+            }
+        });
+        
+        init();
+    </script>
+</body>
+</html>
