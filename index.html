@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Happy Birthday Shivam 🎉</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Sacramento&display=swap" rel="stylesheet">
+  <style>
+    /* Base font for the body */
+    body { font-family: 'Poppins', sans-serif; }
+    
+    /* Typewriter effect styles */
+    .typewriter {
+      font-family: 'Sacramento', cursive;
+      /* Responsive font size */
+      font-size: 1.8rem;
+      @media (min-width: 768px) {
+        font-size: 2.2rem;
+      }
+      /* === FIX: Removed white-space: nowrap; to allow text to wrap to the next line === */
+      /* overflow: hidden is still needed for the typing effect */
+      overflow: hidden; 
+      border-right: 3px solid rgba(255,255,255,0.75);
+      
+      /* STARTING STATE: Width is 0 (Message Hidden) */
+      width: 0;
+    }
+
+    /* TYPING CLASS (Added via JS on button click) */
+    .typewriter.typing-active {
+        /* Animation starts when this class is added */
+        animation: typing 5s steps(70, end) forwards, blink .75s step-end infinite;
+    }
+    
+    /* Animation for the Typing Effect */
+    @keyframes typing {
+      from { width: 0 }
+      to { width: 100% }
+    }
+    
+    /* Animation for the Blinking Cursor */
+    @keyframes blink {
+      50% { border-color: transparent }
+    }
+    
+    /* === NEW: Heartbeat Animation for the Dedication Section === */
+    .heartbeat {
+        animation: pulse 1.5s infinite;
+        display: inline-block;
+        margin: 0 5px;
+    }
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.2); }
+    }
+
+    /* Scrollbar hide for a cleaner look on mobile */
+    body::-webkit-scrollbar { display: none; }
+    body { -ms-overflow-style: none; scrollbar-width: none; }
+    .text-shadow-lg { text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); }
+  </style>
+</head>
+<body class="h-screen w-screen overflow-hidden bg-gradient-to-br from-indigo-700 via-purple-700 to-pink-600 flex items-center justify-center p-4">
+  
+  <canvas id="confetti" class="fixed inset-0 pointer-events-none"></canvas>
+  
+  <div class="relative max-w-xl w-full bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl p-6 md:p-8 text-center text-white z-10 overflow-auto max-h-full">
+    
+    <h1 class="text-4xl md:text-5xl font-extrabold mb-4 bg-gradient-to-r from-pink-400 via-yellow-300 to-purple-400 bg-clip-text text-transparent animate-pulse">
+      🎂 Happy Birthday Shivam 🎂
+    </h1>
+    
+    <div id="typewriterText" class="typewriter mx-auto mb-5 text-shadow-lg">
+      Distance may keep us apart, but wishes fly from Khair to Delhi
+      <br><br> 
+    </div>
+    
+    <div class="mx-auto w-36 h-36 md:w-44 md:h-44 rounded-full overflow-hidden shadow-xl ring-4 ring-pink-400 mb-6">
+      <img src="img1.jpg" alt="Birthday Photo" class="w-full h-full object-cover" />
+    </div>
+    
+    <div class="bg-white/20 rounded-2xl p-4 md:p-6 shadow-inner mb-6">
+      <p class="text-base md:text-lg leading-relaxed font-medium">
+        "On this day of joy and cheer,<br>
+        May blessings follow you year by year.<br>
+        Dreams take flight, success be near,<br>
+        And laughter echo far and clear."
+      </p>
+    </div>
+    
+    <p class="text-sm md:text-md font-semibold tracking-wide mt-4">
+      From <span class="text-pink-300">Lakhan Saraswat</span> 
+      <span class="heartbeat text-red-400 text-lg">❤️</span>
+      To <span class="text-yellow-300">Shivam Saraswat</span>
+    </p>
+    
+    <button id="confettiBtn" class="mt-6 px-6 py-3 bg-gradient-to-r from-pink-400 via-yellow-300 to-purple-400 text-black font-bold rounded-full shadow-xl hover:scale-105 transition duration-300 ease-in-out active:scale-95">
+      🎉 Celebrate
+    </button>
+  </div>
+  
+  <script>
+    const confettiBtn = document.getElementById("confettiBtn");
+    const typewriterElement = document.getElementById("typewriterText");
+
+    // === Typewriter Logic ===
+    function startTyping() {
+        // Add the class that triggers the CSS animation
+        typewriterElement.classList.add('typing-active');
+        // Disable the button after click
+        confettiBtn.disabled = true;
+    }
+
+    // === Confetti Logic (Unchanged) ===
+    const canvas = document.getElementById("confetti");
+    const ctx = canvas.getContext("2d");
+    let confettiPieces = [];
+    
+    function resize() {
+      canvas.width = innerWidth; canvas.height = innerHeight;
+    }
+    window.addEventListener("resize", resize); resize();
+    
+    function makePiece() {
+      const colors = ["#ff6ec7","#7cf7ff","#ffd166","#9bff8f","#c6a8ff"];
+      return {
+        x: Math.random() * canvas.width, y: -10,
+        w: Math.random()*5+2, h: Math.random()*10+5, 
+        c: colors[(Math.random()*colors.length)|0],
+        vy: Math.random()*2+1.5, vx: (Math.random()-0.5)*1.5,
+        rot: Math.random()*Math.PI, vr: (Math.random()-0.5)*0.1,
+        life: Math.random()*300+150 
+      };
+    }
+    
+    function blastConfetti(n=200){
+      for(let i=0;i<n;i++) confettiPieces.push(makePiece());
+    }
+    
+    setInterval(() => blastConfetti(4), 500);
+
+    function update(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      confettiPieces = confettiPieces.filter(p => p.life>0);
+      
+      for(const p of confettiPieces){
+        p.life--; p.y += p.vy; p.x += p.vx; p.rot += p.vr;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = p.c;
+        ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+        ctx.restore();
+      }
+      requestAnimationFrame(update);
+    }
+    update();
+
+    // === Button Event Listener ===
+    confettiBtn.addEventListener("click", () => {
+      startTyping(); 
+      blastConfetti(250);
+    });
+  </script>
+</body>
+</html>
